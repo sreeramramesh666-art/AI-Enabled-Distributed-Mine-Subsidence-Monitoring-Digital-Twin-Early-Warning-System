@@ -94,3 +94,4 @@ def test_full_e2e_mine_monitoring_cycle(client):
     pdf_res = client.get("/api/v1/reports/export?format=pdf")
     assert pdf_res.status_code == 200
     assert pdf_res.content.startswith(b"%PDF")
+

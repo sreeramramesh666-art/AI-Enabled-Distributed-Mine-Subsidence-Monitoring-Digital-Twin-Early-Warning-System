@@ -12,18 +12,24 @@ import {
   Eye,
   FileCheck2,
   AlertTriangle,
+  RotateCcw,
+  SearchCode,
+  ShieldCheck,
 } from 'lucide-react';
 
 export function AlertsPage() {
   const [alerts, setAlerts] = useState([]);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [severityFilter, setSeverityFilter] = useState('ALL');
+  const [panelFilter, setPanelFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
 
   // Modals
   const [inspectAlert, setInspectAlert] = useState(null);
   const [ackAlert, setAckAlert] = useState(null);
   const [resolveAlert, setResolveAlert] = useState(null);
+  const [investigateModalAlert, setInvestigateModalAlert] = useState(null);
+  const [reopenModalAlert, setReopenModalAlert] = useState(null);
 
   // Form states
   const [operatorName, setOperatorName] = useState('Safety Officer Singh');
@@ -31,7 +37,7 @@ export function AlertsPage() {
 
   useEffect(() => {
     loadAlerts();
-  }, [statusFilter, severityFilter]);
+  }, [statusFilter, severityFilter, panelFilter]);
 
   const loadAlerts = async () => {
     setLoading(true);
@@ -39,6 +45,7 @@ export function AlertsPage() {
       const params = {};
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (severityFilter !== 'ALL') params.severity = severityFilter;
+      if (panelFilter !== 'ALL') params.mine_panel = panelFilter;
       const data = await api.getAlerts(params);
       setAlerts(data.items || []);
     } catch (e) {
@@ -64,19 +71,51 @@ export function AlertsPage() {
     }
   };
 
+  const handleInvestigate = async (e) => {
+    e.preventDefault();
+    if (!investigateModalAlert) return;
+    try {
+      await api.investigateAlert(investigateModalAlert.alert_id, {
+        investigated_by: operatorName,
+        investigation_notes: noteText || 'Field geotechnical survey dispatched to measure crack displacement.',
+      });
+      setInvestigateModalAlert(null);
+      setNoteText('');
+      loadAlerts();
+    } catch (err) {
+      alert(`Investigation update error: ${err.message}`);
+    }
+  };
+
   const handleResolve = async (e) => {
     e.preventDefault();
     if (!resolveAlert) return;
     try {
       await api.resolveAlert(resolveAlert.alert_id, {
         resolved_by: operatorName,
-        resolution_notes: noteText || 'Hazard stabilized with rock bolt reinforcement',
+        resolution_notes: noteText || 'Hazard stabilized with rock bolt reinforcement and drainage diversion.',
       });
       setResolveAlert(null);
       setNoteText('');
       loadAlerts();
     } catch (err) {
       alert(`Resolution error: ${err.message}`);
+    }
+  };
+
+  const handleReopen = async (e) => {
+    e.preventDefault();
+    if (!reopenModalAlert) return;
+    try {
+      await api.reopenAlert(reopenModalAlert.alert_id, {
+        reopened_by: operatorName,
+        reason: noteText || 'Subsequent sensor readings indicate continuing displacement progression.',
+      });
+      setReopenModalAlert(null);
+      setNoteText('');
+      loadAlerts();
+    } catch (err) {
+      alert(`Reopen error: ${err.message}`);
     }
   };
 
@@ -107,11 +146,30 @@ export function AlertsPage() {
             Alerts & Geohazard Lifecycle Centre
           </h1>
           <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-            Triaged Geotechnical Findings, Evidence Attribution & Investigation Audit History
+            Multi-Panel Geotechnical Findings, Actionable Protocols & Investigation Audit Trail
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Panel Filter */}
+          <select
+            value={panelFilter}
+            onChange={(e) => setPanelFilter(e.target.value)}
+            style={{
+              backgroundColor: '#1e293b',
+              color: '#ffffff',
+              border: '1px solid var(--border-color)',
+              padding: '0.4rem 0.65rem',
+              borderRadius: '6px',
+              fontSize: '0.8rem'
+            }}
+          >
+            <option value="ALL">All Mine Panels</option>
+            <option value="Panel-North-01">Panel-North-01</option>
+            <option value="Panel-West-03">Panel-West-03</option>
+            <option value="Panel-East-02">Panel-East-02</option>
+          </select>
+
           {/* Status Filter */}
           <select
             value={statusFilter}
@@ -120,15 +178,17 @@ export function AlertsPage() {
               backgroundColor: '#1e293b',
               color: '#ffffff',
               border: '1px solid var(--border-color)',
-              padding: '0.4rem 0.75rem',
+              padding: '0.4rem 0.65rem',
               borderRadius: '6px',
               fontSize: '0.8rem'
             }}
           >
             <option value="ALL">All Statuses</option>
-            <option value="ACTIVE">Active Only</option>
+            <option value="ACTIVE">Active</option>
             <option value="ACKNOWLEDGED">Acknowledged</option>
+            <option value="UNDER_INVESTIGATION">Under Investigation</option>
             <option value="RESOLVED">Resolved</option>
+            <option value="REOPENED">Reopened</option>
           </select>
 
           {/* Severity Filter */}
@@ -139,7 +199,7 @@ export function AlertsPage() {
               backgroundColor: '#1e293b',
               color: '#ffffff',
               border: '1px solid var(--border-color)',
-              padding: '0.4rem 0.75rem',
+              padding: '0.4rem 0.65rem',
               borderRadius: '6px',
               fontSize: '0.8rem'
             }}
@@ -159,10 +219,10 @@ export function AlertsPage() {
           <thead>
             <tr>
               <th>Severity</th>
-              <th>Node ID</th>
+              <th>Node / Panel</th>
               <th>Category</th>
               <th>Finding Title</th>
-              <th>Rule / Model</th>
+              <th>Recommended Action</th>
               <th>Status</th>
               <th>Created (UTC)</th>
               <th>Actions</th>
@@ -181,32 +241,52 @@ export function AlertsPage() {
                   <td>
                     <StatusBadge status={alert.severity} />
                   </td>
-                  <td style={{ fontWeight: 700, color: '#38bdf8' }}>{alert.node_id}</td>
-                  <td>{alert.category}</td>
-                  <td style={{ fontWeight: 500, color: '#f8fafc', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td>
+                    <div style={{ fontWeight: 700, color: '#38bdf8' }}>{alert.node_id}</div>
+                    {alert.mine_panel && (
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{alert.mine_panel}</span>
+                    )}
+                  </td>
+                  <td>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{alert.category}</span>
+                  </td>
+                  <td style={{ fontWeight: 500, color: '#f8fafc', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {alert.title}
                   </td>
-                  <td style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{alert.triggering_rule}</td>
+                  <td style={{ fontSize: '0.72rem', color: '#e2e8f0', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={alert.recommended_action}>
+                    {alert.recommended_action || 'Inspect field sensor and surroundings.'}
+                  </td>
                   <td>
                     <span style={{
-                      fontSize: '0.75rem',
+                      fontSize: '0.72rem',
                       fontWeight: 700,
-                      color: alert.status === 'ACTIVE' ? '#ef4444' : alert.status === 'ACKNOWLEDGED' ? '#f59e0b' : '#10b981'
+                      padding: '0.15rem 0.4rem',
+                      borderRadius: '4px',
+                      backgroundColor: alert.status === 'ACTIVE' ? 'rgba(239, 68, 68, 0.15)' :
+                                      alert.status === 'UNDER_INVESTIGATION' ? 'rgba(56, 189, 248, 0.15)' :
+                                      alert.status === 'ACKNOWLEDGED' ? 'rgba(245, 158, 11, 0.15)' :
+                                      alert.status === 'REOPENED' ? 'rgba(239, 68, 68, 0.2)' :
+                                      'rgba(16, 185, 129, 0.15)',
+                      color: alert.status === 'ACTIVE' ? '#ef4444' :
+                             alert.status === 'UNDER_INVESTIGATION' ? '#38bdf8' :
+                             alert.status === 'ACKNOWLEDGED' ? '#f59e0b' :
+                             alert.status === 'REOPENED' ? '#f87171' :
+                             '#10b981'
                     }}>
                       {alert.status}
                     </span>
                   </td>
-                  <td style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                    {alert.created_at ? new Date(alert.created_at).toLocaleString() : 'N/A'}
+                  <td style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                    {alert.created_at ? new Date(alert.created_at).toLocaleTimeString() : 'N/A'}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                       <button
                         onClick={() => setInspectAlert(alert)}
                         className="btn btn-secondary btn-sm"
                         title="View Evidence & Raw Observations"
                       >
-                        <Eye size={13} />
+                        <Eye size={12} />
                       </button>
 
                       {alert.status === 'ACTIVE' && (
@@ -222,6 +302,20 @@ export function AlertsPage() {
                         </button>
                       )}
 
+                      {(alert.status === 'ACTIVE' || alert.status === 'ACKNOWLEDGED' || alert.status === 'REOPENED') && (
+                        <button
+                          onClick={() => {
+                            setInvestigateModalAlert(alert);
+                            setNoteText('');
+                          }}
+                          className="btn btn-secondary btn-sm"
+                          style={{ borderColor: '#38bdf8', color: '#38bdf8' }}
+                          title="Set Under Investigation"
+                        >
+                          <SearchCode size={12} /> Inv
+                        </button>
+                      )}
+
                       {alert.status !== 'RESOLVED' && (
                         <button
                           onClick={() => {
@@ -231,7 +325,21 @@ export function AlertsPage() {
                           className="btn btn-primary btn-sm"
                           title="Resolve Alert"
                         >
-                          Resolve
+                          <ShieldCheck size={12} /> Resolve
+                        </button>
+                      )}
+
+                      {alert.status === 'RESOLVED' && (
+                        <button
+                          onClick={() => {
+                            setReopenModalAlert(alert);
+                            setNoteText('');
+                          }}
+                          className="btn btn-secondary btn-sm"
+                          style={{ borderColor: '#ef4444', color: '#ef4444' }}
+                          title="Reopen Alert"
+                        >
+                          <RotateCcw size={12} /> Reopen
                         </button>
                       )}
                     </div>
@@ -248,19 +356,26 @@ export function AlertsPage() {
         <Modal
           isOpen={!!inspectAlert}
           onClose={() => setInspectAlert(null)}
-          title={`Alert Inspection [${inspectAlert.alert_id.slice(0, 8)}...]`}
+          title={`Alert Details [${inspectAlert.alert_id.slice(0, 8)}...]`}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <StatusBadge status={inspectAlert.severity} />
               <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                Node: <strong style={{ color: '#f8fafc' }}>{inspectAlert.node_id}</strong>
+                Node: <strong style={{ color: '#38bdf8' }}>{inspectAlert.node_id}</strong>
+                {inspectAlert.mine_panel && ` • ${inspectAlert.mine_panel}`}
               </span>
             </div>
 
             <div>
               <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#f8fafc' }}>{inspectAlert.title}</h4>
               <p style={{ fontSize: '0.85rem', color: '#cbd5e1', marginTop: '0.3rem' }}>{inspectAlert.description}</p>
+            </div>
+
+            {/* Recommended Protocol Box */}
+            <div style={{ backgroundColor: 'rgba(2, 132, 199, 0.1)', border: '1px solid #0284c7', padding: '0.75rem', borderRadius: '6px' }}>
+              <div style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700, marginBottom: '0.3rem' }}>RECOMMENDED ACTION PROTOCOL:</div>
+              <div style={{ fontSize: '0.82rem', color: '#f0f9ff' }}>{inspectAlert.recommended_action || 'Inspect field sensor and verify physical ground conditions.'}</div>
             </div>
 
             <div style={{ backgroundColor: '#1e293b', padding: '0.75rem', borderRadius: '6px', fontSize: '0.8rem' }}>
@@ -270,14 +385,29 @@ export function AlertsPage() {
               </pre>
             </div>
 
-            <div style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <div>Triggering Decision Rule: <strong style={{ color: '#f8fafc' }}>{inspectAlert.triggering_rule}</strong></div>
-              <div>Reported: {new Date(inspectAlert.created_at).toLocaleString()}</div>
-              {inspectAlert.acknowledged_by && (
-                <div>Acknowledged by: {inspectAlert.acknowledged_by} ({new Date(inspectAlert.acknowledged_at).toLocaleString()}) - Note: "{inspectAlert.acknowledgement_note}"</div>
-              )}
-              {inspectAlert.resolved_by && (
-                <div>Resolved by: {inspectAlert.resolved_by} ({new Date(inspectAlert.resolved_at).toLocaleString()}) - Resolution: "{inspectAlert.resolution_notes}"</div>
+            {/* Lifecycle History Timeline */}
+            <div style={{ backgroundColor: '#0f172a', padding: '0.75rem', borderRadius: '6px', fontSize: '0.78rem' }}>
+              <div style={{ color: '#94a3b8', fontWeight: 600, marginBottom: '0.4rem' }}>LIFECYCLE AUDIT TRAIL:</div>
+              {inspectAlert.lifecycle_history && inspectAlert.lifecycle_history.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {inspectAlert.lifecycle_history.map((entry, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderLeft: '2px solid #38bdf8', paddingLeft: '0.5rem', color: '#cbd5e1' }}>
+                      <div>
+                        <strong style={{ color: '#f8fafc' }}>{entry.action}</strong>
+                        {entry.actor && ` by ${entry.actor}`}
+                        {entry.note && ` - "${entry.note}"`}
+                        {entry.notes && ` - "${entry.notes}"`}
+                        {entry.resolution_notes && ` - "${entry.resolution_notes}"`}
+                        {entry.reason && ` - "${entry.reason}"`}
+                      </div>
+                      <span style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                        {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ color: '#64748b', fontStyle: 'italic' }}>Created at {new Date(inspectAlert.created_at).toLocaleString()}</div>
               )}
             </div>
 
@@ -332,6 +462,49 @@ export function AlertsPage() {
         </Modal>
       )}
 
+      {/* Investigate Alert Modal */}
+      {investigateModalAlert && (
+        <Modal isOpen={!!investigateModalAlert} onClose={() => setInvestigateModalAlert(null)} title="Set Alert Under Geotechnical Investigation">
+          <form onSubmit={handleInvestigate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.3rem' }}>
+                Geotechnical Engineer / Lead Surveyor *
+              </label>
+              <input
+                type="text"
+                required
+                value={operatorName}
+                onChange={(e) => setOperatorName(e.target.value)}
+                style={{ width: '100%', padding: '0.5rem', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '4px', color: '#ffffff' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.3rem' }}>
+                Investigation Protocol & Field Observations *
+              </label>
+              <textarea
+                rows={3}
+                required
+                placeholder="e.g. Field crew deployed with inclinometer probe and dial gauge; perimeter safety cordon placed."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                style={{ width: '100%', padding: '0.5rem', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '4px', color: '#ffffff', fontFamily: 'inherit' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button type="button" onClick={() => setInvestigateModalAlert(null)} className="btn btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary">
+                Mark Under Investigation
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {/* Resolve Alert Modal */}
       {resolveAlert && (
         <Modal isOpen={!!resolveAlert} onClose={() => setResolveAlert(null)} title="Resolve Geohazard Alert">
@@ -369,6 +542,49 @@ export function AlertsPage() {
               </button>
               <button type="submit" className="btn btn-primary">
                 Resolve Alert & Close Incident
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Reopen Alert Modal */}
+      {reopenModalAlert && (
+        <Modal isOpen={!!reopenModalAlert} onClose={() => setReopenModalAlert(null)} title="Reopen Resolved Alert">
+          <form onSubmit={handleReopen} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.3rem' }}>
+                Geotechnical Engineer *
+              </label>
+              <input
+                type="text"
+                required
+                value={operatorName}
+                onChange={(e) => setOperatorName(e.target.value)}
+                style={{ width: '100%', padding: '0.5rem', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '4px', color: '#ffffff' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.3rem' }}>
+                Reason for Reopening Incident *
+              </label>
+              <textarea
+                rows={3}
+                required
+                placeholder="e.g. Post-remediation rainfall triggered recurring shear displacement exceeding 2.0 mm/hr."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                style={{ width: '100%', padding: '0.5rem', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '4px', color: '#ffffff', fontFamily: 'inherit' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button type="button" onClick={() => setReopenModalAlert(null)} className="btn btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-danger">
+                Reopen Incident
               </button>
             </div>
           </form>

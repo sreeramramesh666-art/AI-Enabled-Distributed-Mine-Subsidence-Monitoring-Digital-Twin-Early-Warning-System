@@ -10,7 +10,8 @@ import {
   Sliders,
   TrendingDown,
   Layers,
-  ArrowRight
+  ArrowRight,
+  RefreshCw
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -20,6 +21,7 @@ export function DashboardPage({ latestTelemetry, latestAlert }) {
   const [recentAlerts, setRecentAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const loadData = async () => {
     try {
@@ -32,6 +34,7 @@ export function DashboardPage({ latestTelemetry, latestAlert }) {
       setSimStatus(simData);
       setRecentAlerts(alertsData.items || []);
       setError(null);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -87,15 +90,25 @@ export function DashboardPage({ latestTelemetry, latestAlert }) {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: '0.75rem', color: '#64748b', marginRight: '0.5rem' }}>
+            Updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Live'}
+          </div>
+          <button
+            onClick={loadData}
+            className="btn btn-secondary btn-sm"
+            title="Refresh metrics immediately"
+          >
+            <RefreshCw size={13} /> Refresh
+          </button>
           <button
             onClick={handleToggleSimulator}
-            className={`btn ${simStatus?.is_running ? 'btn-danger' : 'btn-primary'}`}
+            className={`btn btn-sm ${simStatus?.is_running ? 'btn-danger' : 'btn-primary'}`}
           >
-            <Sliders size={15} />
+            <Sliders size={13} />
             {simStatus?.is_running ? 'Halt Simulator' : 'Start Simulation'}
           </button>
-          <Link to="/reports" className="btn btn-secondary">
+          <Link to="/reports" className="btn btn-secondary btn-sm">
             Generate Report
           </Link>
         </div>
@@ -210,10 +223,8 @@ export function DashboardPage({ latestTelemetry, latestAlert }) {
             </div>
             <div>
               <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Source</div>
-              <div>
-                <span className="badge" style={{ backgroundColor: '#1e293b', color: '#94a3b8' }}>
-                  {latestTelemetry.data_source}
-                </span>
+              <div style={{ marginTop: '0.2rem' }}>
+                <StatusBadge status={latestTelemetry.data_source} type="source" />
               </div>
             </div>
           </div>
@@ -279,3 +290,4 @@ export function DashboardPage({ latestTelemetry, latestAlert }) {
     </div>
   );
 }
+

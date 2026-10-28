@@ -17,3 +17,4 @@ describe('Navbar', () => {
     expect(screen.getByText(/simulating data/i)).toBeInTheDocument();
   });
 });
+

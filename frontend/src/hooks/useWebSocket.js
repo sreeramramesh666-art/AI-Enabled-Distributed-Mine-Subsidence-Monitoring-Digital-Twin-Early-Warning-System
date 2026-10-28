@@ -71,3 +71,4 @@ export function useWebSocket(onEvent) {
 
   return { isConnected };
 }
+

@@ -95,6 +95,64 @@ class ScenarioGenerator:
                 return {}  # Dropped
             disp_mm = self.rng.gauss(0.1, 0.05)
 
+        # -------------------------------------------------------------
+        # Physical Test-Rig Benchmark Scenarios (SIH26025 Table 12)
+        # -------------------------------------------------------------
+        elif scenario == "testrig_baseline":
+            # Controlled laboratory testbed at static equilibrium on reference plate
+            disp_mm = self.rng.gauss(0.02, 0.01)
+            tilt_x = self.rng.gauss(0.01, 0.005)
+            tilt_y = self.rng.gauss(-0.01, 0.005)
+            vib_rms = max(0.01, self.rng.gauss(0.04, 0.01))
+
+        elif scenario == "testrig_gradual":
+            # Micrometer lead screw turning at constant rate: 0.5 mm per tick up to 10.0 mm
+            rate = 0.5
+            disp_target = min(10.0, t * rate)
+            disp_mm = disp_target + self.rng.gauss(0, 0.02)
+            tilt_x = (disp_target * 0.04) + self.rng.gauss(0, 0.01)
+            tilt_y = (disp_target * 0.02) + self.rng.gauss(0, 0.01)
+            vib_rms = max(0.02, self.rng.gauss(0.06, 0.01))
+
+        elif scenario == "testrig_differential":
+            # Differential subsidence: target node tilts and drops while adjacent reference remains static
+            if is_target_node:
+                disp_val = min(15.0, t * 0.8)
+                disp_mm = disp_val + self.rng.gauss(0, 0.03)
+                tilt_x = min(3.5, 0.15 * t) + self.rng.gauss(0, 0.02)
+                tilt_y = min(2.0, 0.08 * t) + self.rng.gauss(0, 0.02)
+            else:
+                disp_mm = self.rng.gauss(0.02, 0.01)
+                tilt_x = self.rng.gauss(0.01, 0.005)
+
+        elif scenario == "testrig_vibration_only":
+            # Test-rig bench shaker active: high transient vibration, zero net settlement
+            disp_mm = self.rng.gauss(0.02, 0.01)
+            vib_rms = self.rng.uniform(6.5, 14.0)
+            peak_accel = vib_rms * 2.8
+
+        elif scenario == "testrig_disconnect_reconnect":
+            # Sensor cable pull or edge power disconnect at t between 4 and 9, then reconnected
+            if 4 <= t <= 9 and is_target_node:
+                return {}  # Disconnected
+            disp_mm = 2.5 + (0.1 * t) + self.rng.gauss(0, 0.02)
+
+        elif scenario == "testrig_comm_loss":
+            # Radio link interruption to gateway
+            if t > 5 and is_target_node:
+                return {}  # Gateway not receiving packets
+            disp_mm = 0.5 + self.rng.gauss(0, 0.02)
+
+        elif scenario == "testrig_return_stable":
+            # Movement introduced up to t=8, then micrometer halts and plate returns to stable rest
+            if t <= 8:
+                disp_mm = (t * 0.6) + self.rng.gauss(0, 0.02)
+                tilt_x = (t * 0.05) + self.rng.gauss(0, 0.01)
+            else:
+                disp_mm = 4.8 + self.rng.gauss(0, 0.01)
+                tilt_x = 0.40 + self.rng.gauss(0, 0.005)
+                vib_rms = max(0.01, self.rng.gauss(0.03, 0.005))
+
         return {
             "displacement_mm": round(disp_mm, 4) if disp_mm is not None else None,
             "tilt_x_deg": round(tilt_x, 3) if tilt_x is not None else None,
@@ -106,3 +164,4 @@ class ScenarioGenerator:
             "battery_pct": round(base_battery, 1),
             "battery_voltage_v": round(3.3 + (base_battery / 100.0) * 0.9, 2)
         }
+

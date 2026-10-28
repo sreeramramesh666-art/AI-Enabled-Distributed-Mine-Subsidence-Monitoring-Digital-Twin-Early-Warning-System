@@ -22,4 +22,15 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="OFFLINE" type="connectivity" />);
     expect(screen.getByText(/offline/i)).toBeInTheDocument();
   });
+
+  it('renders SYNTHETIC SIMULATOR source badge correctly', () => {
+    render(<StatusBadge status="simulator" type="source" />);
+    expect(screen.getByText(/synthetic simulator/i)).toBeInTheDocument();
+  });
+
+  it('renders PHYSICAL SENSOR source badge correctly', () => {
+    render(<StatusBadge status="rest" type="source" />);
+    expect(screen.getByText(/physical sensor/i)).toBeInTheDocument();
+  });
 });
+

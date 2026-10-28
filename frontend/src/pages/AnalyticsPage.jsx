@@ -9,32 +9,41 @@ import {
   RefreshCw,
   Info,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  MapPin,
+  Layers
 } from 'lucide-react';
 
 export function AnalyticsPage() {
   const [summary, setSummary] = useState(null);
   const [healthList, setHealthList] = useState([]);
   const [mlStatus, setMlStatus] = useState(null);
+  const [spatialCorrob, setSpatialCorrob] = useState(null);
   const [training, setTraining] = useState(false);
   const [trainMessage, setTrainMessage] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      const [sum, health, ml] = await Promise.all([
-        api.getAnalyticsSummary(),
-        api.getNodeHealth(),
-        api.getMLStatus(),
+      const [sum, health, ml, spatial] = await Promise.all([
+        api.getAnalyticsSummary().catch(() => null),
+        api.getNodeHealth().catch(() => []),
+        api.getMLStatus().catch(() => null),
+        api.getSpatialCorroboration().catch(() => null),
       ]);
       setSummary(sum);
-      setHealthList(health);
+      setHealthList(health || []);
       setMlStatus(ml);
+      setSpatialCorrob(spatial);
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -173,6 +182,72 @@ export function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Spatial Multi-Node Subsidence Corroboration */}
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <MapPin size={18} style={{ color: '#ec4899' }} />
+              <h2 style={{ fontSize: '1rem', fontWeight: 600, color: '#f8fafc' }}>
+                Spatial Multi-Node Movement Corroboration
+              </h2>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+              Corroborates concurrent displacement across proximate nodes within a {spatialCorrob?.radius_meters || 500}m radius to distinguish true macro ground subsidence from isolated transducer anomalies.
+            </p>
+          </div>
+
+          <button onClick={loadData} className="btn btn-secondary btn-sm" title="Refresh Corroboration Analysis">
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
+
+        {spatialCorrob?.clusters && spatialCorrob.clusters.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {spatialCorrob.clusters.map((c) => (
+              <div
+                key={c.cluster_id}
+                style={{
+                  backgroundColor: c.is_multi_node_hazard ? 'rgba(239, 68, 68, 0.1)' : '#1e293b',
+                  border: c.is_multi_node_hazard ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  padding: '0.85rem'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.9rem' }}>
+                      Cluster {c.cluster_id} ({c.node_count} Proximate Nodes)
+                    </span>
+                    {c.is_multi_node_hazard && (
+                      <span className="badge badge-critical" style={{ fontSize: '0.7rem' }}>
+                        Macro Subsidence Corroborated
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                    Avg Disp: <strong style={{ color: '#38bdf8' }}>{c.average_displacement_mm !== null ? `${c.average_displacement_mm.toFixed(2)} mm` : 'N/A'}</strong> •
+                    Avg Rate: <strong style={{ color: '#f59e0b' }}>{c.average_velocity_mm_hr !== null ? `${c.average_velocity_mm_hr.toFixed(2)} mm/hr` : 'N/A'}</strong>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.4rem' }}>
+                  Nodes in Cluster: {c.node_ids.map((id) => (
+                    <span key={id} style={{ display: 'inline-block', backgroundColor: '#0f172a', padding: '0.15rem 0.45rem', borderRadius: '4px', margin: '0.15rem', color: '#38bdf8', fontWeight: 600 }}>
+                      {id}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ padding: '1.25rem', backgroundColor: '#0b0f19', borderRadius: '6px', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
+            No multi-node spatial movement clusters detected. All sensor nodes are operating in isolated equilibrium within 500m radius.
+          </div>
+        )}
+      </div>
+
       {/* Node Health Matrix */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #1e293b' }}>
@@ -219,3 +294,4 @@ export function AnalyticsPage() {
     </div>
   );
 }
+

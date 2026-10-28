@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
-import { Plus, Edit, Cpu, Battery, Wifi, Check, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Cpu, Battery, Wifi, Check, AlertCircle, LineChart, Trash2, Search, Filter, RefreshCw } from 'lucide-react';
 
-export function NodesPage() {
+export function NodesPage({ latestNodeStatus }) {
   const [nodes, setNodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editNode, setEditNode] = useState(null);
+  const [deleteConfirmNode, setDeleteConfirmNode] = useState(null);
+  const [hardDelete, setHardDelete] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   // Form states
   const [newNode, setNewNode] = useState({
@@ -27,11 +32,28 @@ export function NodesPage() {
 
   useEffect(() => {
     loadNodes();
-  }, []);
+    const interval = setInterval(loadNodes, 6000);
+    return () => clearInterval(interval);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (latestNodeStatus) {
+      setNodes((prevNodes) =>
+        prevNodes.map((n) =>
+          n.node_id === latestNodeStatus.node_id
+            ? { ...n, ...latestNodeStatus }
+            : n
+        )
+      );
+    }
+  }, [latestNodeStatus]);
 
   const loadNodes = async () => {
+    setLoading(true);
     try {
-      const data = await api.getNodes();
+      const params = {};
+      if (statusFilter !== 'ALL') params.status = statusFilter;
+      const data = await api.getNodes(params);
       setNodes(data.items || []);
     } catch (e) {
       console.error(e);
@@ -79,6 +101,29 @@ export function NodesPage() {
     }
   };
 
+  const handleDeleteNode = async (e) => {
+    e.preventDefault();
+    if (!deleteConfirmNode) return;
+    try {
+      await api.deleteNode(deleteConfirmNode.node_id, hardDelete);
+      setDeleteConfirmNode(null);
+      setHardDelete(false);
+      loadNodes();
+    } catch (err) {
+      alert(`Delete error: ${err.message}`);
+    }
+  };
+
+  const filteredNodes = nodes.filter((n) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      n.node_id.toLowerCase().includes(q) ||
+      (n.name && n.name.toLowerCase().includes(q)) ||
+      (n.installation_location && n.installation_location.toLowerCase().includes(q))
+    );
+  });
+
   return (
     <div className="page-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {/* Page Header */}
@@ -98,6 +143,54 @@ export function NodesPage() {
         </button>
       </div>
 
+      {/* Search and Filters Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '220px', maxWidth: '400px' }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+            <input
+              type="text"
+              placeholder="Search by node ID, name, or location..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.45rem 0.75rem 0.45rem 2rem',
+                backgroundColor: '#1e293b',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                color: '#f8fafc',
+                fontSize: '0.825rem'
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{
+              backgroundColor: '#1e293b',
+              color: '#ffffff',
+              border: '1px solid var(--border-color)',
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              fontSize: '0.825rem'
+            }}
+          >
+            <option value="ALL">All Connectivity</option>
+            <option value="ONLINE">Online Only</option>
+            <option value="STALE">Stale Only</option>
+            <option value="OFFLINE">Offline Only</option>
+          </select>
+
+          <button onClick={loadNodes} className="btn btn-secondary btn-sm" title="Refresh Inventory">
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
+      </div>
+
       {/* Nodes Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <table className="data-table">
@@ -114,43 +207,77 @@ export function NodesPage() {
             </tr>
           </thead>
           <tbody>
-            {nodes.map((node) => (
-              <tr key={node.node_id}>
-                <td style={{ fontWeight: 700, color: '#38bdf8' }}>{node.node_id}</td>
-                <td>
-                  <div style={{ fontWeight: 600, color: '#f8fafc' }}>{node.name}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{node.installation_location || 'Field site'}</div>
-                </td>
-                <td style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
-                  {node.latitude.toFixed(4)}°, {node.longitude.toFixed(4)}°
-                  {node.elevation_m ? ` (${node.elevation_m}m)` : ''}
-                </td>
-                <td>
-                  <span className="badge" style={{ backgroundColor: '#1e293b', color: '#94a3b8' }}>
-                    {node.node_type}
-                  </span>
-                </td>
-                <td>
-                  <StatusBadge status={node.connectivity_status} type="connectivity" />
-                </td>
-                <td style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
-                  {node.battery_pct !== null && node.battery_pct !== undefined
-                    ? `${node.battery_pct.toFixed(0)}%`
-                    : 'N/A'}
-                </td>
-                <td style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                  {node.last_seen ? new Date(node.last_seen).toLocaleString() : 'Never'}
-                </td>
-                <td>
-                  <button
-                    onClick={() => setEditNode(node)}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <Edit size={13} /> Edit
-                  </button>
+            {loading ? (
+              <tr>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                  Loading sensor node inventory...
                 </td>
               </tr>
-            ))}
+            ) : filteredNodes.length === 0 ? (
+              <tr>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b' }}>
+                  No sensor nodes match your search criteria.
+                </td>
+              </tr>
+            ) : (
+              filteredNodes.map((node) => (
+                <tr key={node.node_id}>
+                  <td style={{ fontWeight: 700, color: '#38bdf8' }}>{node.node_id}</td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: '#f8fafc' }}>{node.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{node.installation_location || 'Field site'}</div>
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                    {node.latitude.toFixed(4)}°, {node.longitude.toFixed(4)}°
+                    {node.elevation_m ? ` (${node.elevation_m}m)` : ''}
+                  </td>
+                  <td>
+                    <span className="badge" style={{ backgroundColor: '#1e293b', color: '#94a3b8' }}>
+                      {node.node_type}
+                    </span>
+                  </td>
+                  <td>
+                    <StatusBadge status={node.connectivity_status} type="connectivity" />
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                    {node.battery_pct !== null && node.battery_pct !== undefined
+                      ? `${node.battery_pct.toFixed(0)}%`
+                      : 'N/A'}
+                  </td>
+                  <td style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    {node.last_seen ? new Date(node.last_seen).toLocaleString() : 'Never'}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                      <Link
+                        to={`/telemetry?node_id=${encodeURIComponent(node.node_id)}`}
+                        className="btn btn-secondary btn-sm"
+                        title="View Telemetry & Baseline"
+                      >
+                        <LineChart size={13} />
+                      </Link>
+                      <button
+                        onClick={() => setEditNode(node)}
+                        className="btn btn-secondary btn-sm"
+                        title="Edit Node Metadata"
+                      >
+                        <Edit size={13} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeleteConfirmNode(node);
+                          setHardDelete(false);
+                        }}
+                        className="btn btn-danger btn-sm"
+                        title="Decommission / Remove Node"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -315,6 +442,58 @@ export function NodesPage() {
           </form>
         </Modal>
       )}
+
+      {/* Delete / Decommission Node Modal */}
+      {deleteConfirmNode && (
+        <Modal
+          isOpen={!!deleteConfirmNode}
+          onClose={() => setDeleteConfirmNode(null)}
+          title={`Decommission Node ${deleteConfirmNode.node_id}`}
+        >
+          <form onSubmit={handleDeleteNode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ color: '#cbd5e1', fontSize: '0.875rem', lineHeight: 1.6 }}>
+              Are you sure you want to decommission node <strong style={{ color: '#f8fafc' }}>{deleteConfirmNode.node_id}</strong> ({deleteConfirmNode.name})?
+            </div>
+
+            <div style={{
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid #991b1b',
+              padding: '0.75rem',
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              color: '#fca5a5'
+            }}>
+              <strong>Warning:</strong> Soft decommissioning marks the node disabled and offline, preserving audit and historical telemetry records. Hard purge deletes all associated telemetry and active alerts permanently.
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input
+                type="checkbox"
+                id="hardDeleteCheck"
+                checked={hardDelete}
+                onChange={(e) => setHardDelete(e.target.checked)}
+              />
+              <label htmlFor="hardDeleteCheck" style={{ fontSize: '0.85rem', color: '#f87171', fontWeight: 600 }}>
+                Permanently purge all associated telemetry and cascade records (Hard Delete)
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmNode(null)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-danger">
+                {hardDelete ? 'Permanently Delete' : 'Decommission Node'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
+

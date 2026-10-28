@@ -1,10 +1,27 @@
 from typing import Optional
-from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field, field_validator
 
 from backend.app.simulator.engine import simulator_engine
 
 router = APIRouter(prefix="/simulator", tags=["Simulator Control"])
+
+ALLOWED_SCENARIOS = {
+    "baseline",
+    "gradual_settlement",
+    "accelerating_subsidence",
+    "sudden_collapse",
+    "vibration_blast",
+    "sensor_drift",
+    "packet_loss",
+    "testrig_baseline",
+    "testrig_gradual",
+    "testrig_differential",
+    "testrig_vibration_only",
+    "testrig_disconnect_reconnect",
+    "testrig_comm_loss",
+    "testrig_return_stable"
+}
 
 
 class SimulatorStartRequest(BaseModel):
@@ -15,6 +32,14 @@ class SimulatorStartRequest(BaseModel):
     interval_sec: float = Field(2.0, ge=0.5, le=60.0)
     node_count: int = Field(6, ge=1, le=10)
     seed: int = Field(42, ge=0)
+
+    @field_validator("scenario")
+    @classmethod
+    def validate_scenario_name(cls, v: str) -> str:
+        s = v.strip().lower()
+        if s not in ALLOWED_SCENARIOS:
+            raise ValueError(f"Unknown scenario '{v}'. Allowed scenarios: {', '.join(sorted(ALLOWED_SCENARIOS))}")
+        return s
 
 
 @router.get("/status")

@@ -52,3 +52,4 @@ def test_critical_geotechnical_rules():
     assert "DISPLACEMENT" in categories
     assert "TILT" in categories
     assert "BATTERY" in categories
+

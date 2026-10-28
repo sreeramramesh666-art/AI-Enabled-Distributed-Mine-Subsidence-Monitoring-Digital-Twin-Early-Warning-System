@@ -22,15 +22,19 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite:///./data/mineguard.db"
 
-    # MQTT
+    # MQTT Configuration
     MQTT_ENABLED: bool = False
     MQTT_BROKER_HOST: str = "localhost"
     MQTT_BROKER_PORT: int = 1883
+    MQTT_CLIENT_ID: str = "mineguard-central-backend"
     MQTT_USERNAME: str = ""
     MQTT_PASSWORD: str = ""
     MQTT_TOPIC_PREFIX: str = "mineguard"
     MQTT_TLS_ENABLED: bool = False
     MQTT_KEEPALIVE: int = 60
+    MQTT_RECONNECT_MIN_DELAY_S: float = 1.0
+    MQTT_RECONNECT_MAX_DELAY_S: float = 60.0
+    GATEWAY_REPLAY_MAX_BATCH_SIZE: int = 2000
 
     # Geotechnical Demonstration Thresholds (SI Units)
     TILT_WARNING_DEG: float = 2.0
@@ -40,6 +44,8 @@ class Settings(BaseSettings):
     RATE_WARNING_MM_HR: float = 2.0
     RATE_CRITICAL_MM_HR: float = 5.0
     ACCEL_WARNING_MM_HR2: float = 0.5
+    STEP_DISPLACEMENT_THRESHOLD_MM: float = 8.0
+    SPATIAL_CORROBORATION_RADIUS_M: float = 500.0
     VIBRATION_WARNING_MS2: float = 3.0
     VIBRATION_CRITICAL_MS2: float = 8.0
     BATTERY_LOW_PCT: float = 20.0
@@ -71,3 +77,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

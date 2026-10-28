@@ -15,10 +15,12 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SimulatorPage } from './pages/SimulatorPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ExperimentsPage } from './pages/ExperimentsPage';
 
 export function App() {
   const [latestTelemetry, setLatestTelemetry] = useState(null);
   const [latestAlert, setLatestAlert] = useState(null);
+  const [latestNodeStatus, setLatestNodeStatus] = useState(null);
   const [activeAlertCount, setActiveAlertCount] = useState(0);
   const [simulatorRunning, setSimulatorRunning] = useState(false);
 
@@ -49,6 +51,8 @@ export function App() {
 
     if (type === 'telemetry') {
       setLatestTelemetry(data);
+    } else if (type === 'node_status') {
+      setLatestNodeStatus(data);
     } else if (type === 'alert') {
       setLatestAlert(data);
       setActiveAlertCount((prev) => prev + 1);
@@ -82,12 +86,13 @@ export function App() {
               />
               <Route
                 path="/map"
-                element={<MapPage latestTelemetry={latestTelemetry} />}
+                element={<MapPage latestTelemetry={latestTelemetry} latestNodeStatus={latestNodeStatus} />}
               />
-              <Route path="/nodes" element={<NodesPage />} />
+              <Route path="/nodes" element={<NodesPage latestNodeStatus={latestNodeStatus} />} />
               <Route path="/telemetry" element={<TelemetryPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/experiments" element={<ExperimentsPage />} />
               <Route
                 path="/simulator"
                 element={<SimulatorPage latestTelemetry={latestTelemetry} />}
@@ -103,3 +108,4 @@ export function App() {
 }
 
 export default App;
+

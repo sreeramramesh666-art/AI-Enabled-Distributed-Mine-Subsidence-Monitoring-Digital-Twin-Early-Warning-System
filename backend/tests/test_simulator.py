@@ -33,3 +33,4 @@ def test_simulator_api_controls(client):
     stop_res = client.post("/api/v1/simulator/stop")
     assert stop_res.status_code == 200
     assert stop_res.json()["is_running"] is False
+

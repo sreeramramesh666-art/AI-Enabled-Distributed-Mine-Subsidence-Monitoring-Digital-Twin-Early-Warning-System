@@ -1,3 +1,4 @@
+import random
 from backend.app.analytics.anomaly_detection import MultivariateAnomalyDetector
 
 
@@ -10,16 +11,23 @@ def test_analytics_endpoints(client):
     assert res_health.status_code == 200
     assert isinstance(res_health.json(), list)
 
+    # Trends for valid node
     res_trends = client.get("/api/v1/analytics/trends?node_id=TEST-NODE-01&hours=24")
     assert res_trends.status_code == 200
     assert res_trends.json()["node_id"] == "TEST-NODE-01"
 
+    # Trends for unknown node returns 404
+    assert client.get("/api/v1/analytics/trends?node_id=UNKNOWN-NODE-404&hours=24").status_code == 404
+
+    # Spatial corroboration endpoint
+    res_spatial = client.get("/api/v1/analytics/spatial-corroboration?max_dist_m=800")
+    assert res_spatial.status_code == 200
+    assert "active_clusters" in res_spatial.json()
+
 
 def test_multivariate_anomaly_detector():
-    import random
     rng = random.Random(42)
     detector = MultivariateAnomalyDetector()
-    # Create 35 baseline samples with realistic slight physical noise
     samples = [
         {
             "displacement_mm": 0.1 + rng.gauss(0, 0.02),
@@ -47,3 +55,9 @@ def test_multivariate_anomaly_detector():
     is_anomaly, score, factor = detector.predict(outlier)
     assert is_anomaly is True
     assert factor is not None
+
+
+def test_ml_train_endpoint(client):
+    res = client.post("/api/v1/analytics/ml-train")
+    assert res.status_code == 200
+    assert "sample_count" in res.json()

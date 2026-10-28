@@ -14,6 +14,7 @@ def calculate_risk_profile(
     """
     Calculate transparent, multi-factor geotechnical risk indicators.
     Separates physical deformation hazard from data quality / connectivity uncertainty.
+    Guarantees that stale or missing data CANNOT silently produce a false 'NORMAL'/safe status.
     """
     active_indicators: List[str] = []
 
@@ -58,32 +59,52 @@ def calculate_risk_profile(
 
     # 4. Data Quality Score (0 to 100, where 100 = perfect fidelity, 0 = broken/missing)
     data_quality_score = 100.0
-    if connectivity_status == "OFFLINE":
-        data_quality_score = 10.0
+    conn = connectivity_status.upper() if connectivity_status else "OFFLINE"
+    if conn == "OFFLINE":
+        data_quality_score = 0.0
         active_indicators.append("NODE_OFFLINE")
-    elif connectivity_status == "STALE":
-        data_quality_score = 40.0
+    elif conn == "STALE":
+        data_quality_score = 30.0
         active_indicators.append("STALE_DATA_HEARTBEAT")
 
-    if quality.get("has_missing_data", False):
-        data_quality_score = max(0.0, data_quality_score - 25.0)
+    has_missing = quality.get("has_missing_data", False)
+    if has_missing:
+        data_quality_score = max(0.0, data_quality_score - 30.0)
+        active_indicators.append("SENSOR_DROPOUT_MISSING_DATA")
+
+    # Critical Safeguard: If physical measurements are completely absent, data quality cannot verify safety
+    if displacement_mm is None and vector_tilt_deg is None:
+        data_quality_score = min(data_quality_score, 20.0)
+        active_indicators.append("NO_PHYSICAL_MEASUREMENTS")
 
     # Compute overall physical risk score
     physical_score = max(deformation_score, rate_score, tilt_score)
-    # Blend with average of active physical hazards
     hazard_components = [c for c in [deformation_score, rate_score, tilt_score] if c > 0]
     if hazard_components:
         overall_score = round(0.7 * physical_score + 0.3 * (sum(hazard_components) / len(hazard_components)), 1)
     else:
         overall_score = 0.0
 
-    # Categorization logic
-    if data_quality_score <= 40.0 and overall_score < 50.0:
-        category = "DATA_UNRELIABLE"
-        summary = "Monitoring data is stale or incomplete. Physical safety status cannot be reliably verified."
-    elif overall_score >= 75.0 or "CRITICAL_ACCELERATION" in active_indicators or "CRITICAL_DISPLACEMENT" in active_indicators or "CRITICAL_TILT" in active_indicators:
+    # Categorization logic with Anti-False-Safe Safeguard
+    has_critical_movement = (
+        overall_score >= 75.0 or
+        "CRITICAL_ACCELERATION" in active_indicators or
+        "CRITICAL_DISPLACEMENT" in active_indicators or
+        "CRITICAL_TILT" in active_indicators
+    )
+
+    if has_critical_movement:
         category = "CRITICAL"
         summary = "Critical geotechnical instability detected. Accelerating subsidence or high cumulative movement."
+    elif conn in ("OFFLINE", "STALE") or data_quality_score <= 40.0:
+        # Cannot be classified as NORMAL or SAFE under degraded connectivity/telemetry
+        category = "DATA_UNRELIABLE"
+        if conn == "OFFLINE":
+            summary = "Monitoring node is OFFLINE. Ground deformation status is unmonitored."
+        elif conn == "STALE":
+            summary = "Monitoring telemetry is STALE. Recent ground deformation cannot be verified."
+        else:
+            summary = "Sensor channels report missing or degraded data. Safety status is unverified."
     elif overall_score >= 45.0 or "WARNING_DISPLACEMENT" in active_indicators or "WARNING_VELOCITY" in active_indicators or "WARNING_TILT" in active_indicators:
         category = "WARNING"
         summary = "Elevated ground movement or tilt observed exceeding operational warning thresholds."

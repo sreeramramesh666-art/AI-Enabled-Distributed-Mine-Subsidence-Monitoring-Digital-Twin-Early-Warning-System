@@ -1,11 +1,11 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.db.database import get_db
-from backend.app.db.models import TelemetryRecord
+from backend.app.db.models import TelemetryRecord, SensorNode
 from backend.app.schemas.analytics import (
-    AnalyticsSummaryResponse, TrendResponse, NodeHealthItem
+    AnalyticsSummaryResponse, TrendResponse, NodeHealthItem, SpatialCorroborationResponse
 )
 from backend.app.services.analytics_service import AnalyticsService
 from backend.app.simulator.engine import simulator_engine
@@ -25,12 +25,24 @@ def get_trends(
     hours: float = Query(24.0, ge=0.5, le=720.0),
     db: Session = Depends(get_db)
 ):
-    return AnalyticsService.get_trends(db=db, node_id=node_id, hours=hours)
+    trends = AnalyticsService.get_trends(db=db, node_id=node_id, hours=hours)
+    if not trends:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Sensor node '{node_id}' not found")
+    return trends
 
 
 @router.get("/node-health", response_model=List[NodeHealthItem])
 def get_node_health(db: Session = Depends(get_db)):
     return AnalyticsService.get_node_health(db=db)
+
+
+@router.get("/spatial-corroboration", response_model=SpatialCorroborationResponse)
+def get_spatial_corroboration(
+    max_dist_m: float = Query(600.0, ge=50.0, le=5000.0, description="Maximum neighbour clustering distance in metres"),
+    db: Session = Depends(get_db)
+):
+    """Calculate multi-node spatial corroboration to distinguish localized sensor faults from true ground movement."""
+    return AnalyticsService.get_spatial_corroboration(db=db, max_cluster_dist_m=max_dist_m)
 
 
 @router.get("/ml-status")
@@ -43,7 +55,7 @@ def train_ml_baseline(db: Session = Depends(get_db)):
     """Train or retrain unsupervised Isolation Forest on clean baseline records."""
     records = db.query(TelemetryRecord).filter(
         TelemetryRecord.data_source.in_(["simulator", "rest", "mqtt"])
-    ).limit(500).all()
+    ).limit(1000).all()
 
     record_dicts = [
         {

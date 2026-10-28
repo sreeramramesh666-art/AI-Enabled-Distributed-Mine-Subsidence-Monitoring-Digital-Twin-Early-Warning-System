@@ -50,3 +50,4 @@ def validate_physical_measurements(telemetry: TelemetryIngest) -> Tuple[bool, Op
             quality["has_missing_data"] = True
 
     return True, None, quality
+

@@ -29,8 +29,16 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+def get_canonical_url() -> str:
+    db_url = settings.DATABASE_URL
+    if db_url.startswith("sqlite:///./") or db_url.startswith("sqlite:///data/"):
+        rel_path = db_url.replace("sqlite:///./", "").replace("sqlite:///", "")
+        abs_db_path = os.path.join(repo_root, rel_path)
+        return f"sqlite:///{abs_db_path}"
+    return db_url
+
 def run_migrations_offline() -> None:
-    url = settings.DATABASE_URL
+    url = get_canonical_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -44,7 +52,7 @@ def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section)
     if configuration is None:
         configuration = {}
-    configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    configuration["sqlalchemy.url"] = get_canonical_url()
 
     connectable = engine_from_config(
         configuration,
@@ -63,3 +71,4 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+

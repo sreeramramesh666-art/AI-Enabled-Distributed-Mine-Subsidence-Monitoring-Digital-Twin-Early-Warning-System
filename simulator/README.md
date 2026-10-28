@@ -20,3 +20,4 @@ The simulator can be run either:
    python backend/app/simulator/engine.py --scenario accelerating_subsidence --interval 2.0 --nodes 6
    ```
 All synthetic data is explicitly tagged with `data_source: "simulator"` and displayed with prominent simulated data badges in the UI and reports.
+

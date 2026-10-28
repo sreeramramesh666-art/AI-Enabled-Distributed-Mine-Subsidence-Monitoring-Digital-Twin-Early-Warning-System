@@ -136,3 +136,4 @@ def downgrade() -> None:
     op.drop_table('alerts')
     op.drop_table('telemetry_records')
     op.drop_table('sensor_nodes')
+

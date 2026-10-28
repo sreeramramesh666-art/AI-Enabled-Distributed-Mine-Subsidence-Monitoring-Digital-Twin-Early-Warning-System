@@ -94,3 +94,4 @@ export function Navbar({ isConnected, simulatorRunning, onToggleSimulator }) {
     </header>
   );
 }
+

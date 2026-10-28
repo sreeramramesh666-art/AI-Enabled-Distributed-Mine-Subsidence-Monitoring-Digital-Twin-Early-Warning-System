@@ -73,3 +73,4 @@ MineGuard-AI is an industrial, local-first monitoring platform engineered for op
 4. **Auditability & Traceability**:
    - Every alert captures contributing raw measurements, triggering rule/model, and baseline reference.
    - Complete audit trail of operator acknowledgements and resolution notes.
+

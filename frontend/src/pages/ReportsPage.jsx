@@ -1,21 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import { FileText, Download, AlertTriangle, ShieldCheck, Calendar, Filter } from 'lucide-react';
+import { FileText, Download, AlertTriangle, ShieldCheck, Calendar, Filter, Clock } from 'lucide-react';
 
 export function ReportsPage() {
   const [nodes, setNodes] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState('');
   const [summary, setSummary] = useState(null);
+  const [timePreset, setTimePreset] = useState('24h');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    api.getNodes().then((data) => setNodes(data.items || []));
-    api.getAnalyticsSummary().then(setSummary);
+    api.getNodes().then((data) => setNodes(data.items || [])).catch(console.error);
+    api.getAnalyticsSummary().then(setSummary).catch(console.error);
+    applyPreset('24h');
   }, []);
 
+  const applyPreset = (preset) => {
+    setTimePreset(preset);
+    const now = new Date();
+    if (preset === '1h') {
+      const past = new Date(now.getTime() - 1 * 3600 * 1000);
+      setStartDate(past.toISOString().slice(0, 16));
+      setEndDate(now.toISOString().slice(0, 16));
+    } else if (preset === '24h') {
+      const past = new Date(now.getTime() - 24 * 3600 * 1000);
+      setStartDate(past.toISOString().slice(0, 16));
+      setEndDate(now.toISOString().slice(0, 16));
+    } else if (preset === '7d') {
+      const past = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+      setStartDate(past.toISOString().slice(0, 16));
+      setEndDate(now.toISOString().slice(0, 16));
+    } else {
+      setStartDate('');
+      setEndDate('');
+    }
+  };
+
   const handleExport = (format) => {
+    setDownloading(true);
     let url = `/api/v1/reports/export?format=${format}`;
     if (selectedNodeId) url += `&node_id=${encodeURIComponent(selectedNodeId)}`;
+    if (startDate) {
+      const sIso = new Date(startDate).toISOString();
+      url += `&start_time=${encodeURIComponent(sIso)}`;
+    }
+    if (endDate) {
+      const eIso = new Date(endDate).toISOString();
+      url += `&end_time=${encodeURIComponent(eIso)}`;
+    }
     window.open(url, '_blank');
+    setTimeout(() => setDownloading(false), 2000);
   };
 
   return (
@@ -25,7 +61,7 @@ export function ReportsPage() {
           Geotechnical Export & Audit Reports
         </h1>
         <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-          Official Monitoring Dossier, Raw CSV Export & Regulatory Verification Logs
+          Official Geotechnical Monitoring Dossier, Raw CSV Export & Regulatory Verification Logs
         </p>
       </div>
 
@@ -44,7 +80,92 @@ export function ReportsPage() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+      {/* Filter Parameters Bar */}
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Filter size={15} style={{ color: '#38bdf8' }} />
+          <span>Report Scope & Temporal Filtering</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'flex-end' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
+              Target Sensor Node
+            </label>
+            <select
+              value={selectedNodeId}
+              onChange={(e) => setSelectedNodeId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.45rem',
+                backgroundColor: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+                color: '#ffffff',
+                fontSize: '0.8rem'
+              }}
+            >
+              <option value="">All Registered Nodes (Concession-Wide)</option>
+              {nodes.map((n) => (
+                <option key={n.node_id} value={n.node_id}>
+                  {n.node_id} — {n.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
+              Time Presets
+            </label>
+            <div style={{ display: 'flex', gap: '0.3rem' }}>
+              {['1h', '24h', '7d', 'all'].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  className={`btn btn-sm ${timePreset === p ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ textTransform: 'uppercase', padding: '0.4rem 0.6rem' }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
+              Start Timestamp (Local)
+            </label>
+            <input
+              type="datetime-local"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setTimePreset('custom');
+              }}
+              style={{ width: '100%', padding: '0.4rem', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '4px', color: '#ffffff', fontSize: '0.75rem' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
+              End Timestamp (Local)
+            </label>
+            <input
+              type="datetime-local"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setTimePreset('custom');
+              }}
+              style={{ width: '100%', padding: '0.4rem', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '4px', color: '#ffffff', fontSize: '0.75rem' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
         {/* PDF Audit Report Card */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
@@ -55,19 +176,25 @@ export function ReportsPage() {
               </h2>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.6 }}>
-              Generates a publication-grade geotechnical status report incorporating executive KPI metrics, registered transducer baselines, recent geohazard triggers, and Directorate General of Mines Safety (DGMS) disclaimers.
+              Generates a publication-grade geotechnical status dossier incorporating executive KPI metrics, registered transducer baselines, recent geohazard triggers, and Directorate General of Mines Safety (DGMS) disclaimers.
             </p>
 
             <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#1e293b', borderRadius: '6px', fontSize: '0.75rem', color: '#cbd5e1' }}>
               <div>• Current Monitored Nodes: <strong>{summary?.total_nodes || 0}</strong></div>
               <div>• Active Critical Alerts: <strong>{summary?.active_critical_alerts || 0}</strong></div>
               <div>• Data Completeness: <strong>{summary?.data_completeness_pct || 0}%</strong></div>
+              <div>• Target Scope: <strong>{selectedNodeId || 'Concession-wide'}</strong></div>
             </div>
           </div>
 
           <div style={{ marginTop: '1.5rem' }}>
-            <button onClick={() => handleExport('pdf')} className="btn btn-primary" style={{ width: '100%' }}>
-              <Download size={15} /> Download Comprehensive PDF Report
+            <button
+              onClick={() => handleExport('pdf')}
+              disabled={downloading}
+              className="btn btn-primary"
+              style={{ width: '100%' }}
+            >
+              <Download size={15} /> {downloading ? 'Preparing PDF Dossier...' : 'Download Comprehensive PDF Report'}
             </button>
           </div>
         </div>
@@ -82,39 +209,24 @@ export function ReportsPage() {
               </h2>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.6 }}>
-              Export high-frequency kinematic records formatted according to RFC 4180 standards for external GIS modeling (QGIS, ArcGIS, FLAC3D, Rocscience).
+              Export high-frequency kinematic records formatted according to RFC 4180 standards for external geotechnical numerical modeling (QGIS, ArcGIS, FLAC3D, Rocscience).
             </p>
 
-            <div style={{ marginTop: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.3rem' }}>
-                Filter by Sensor Node:
-              </label>
-              <select
-                value={selectedNodeId}
-                onChange={(e) => setSelectedNodeId(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: '4px',
-                  color: '#ffffff',
-                  fontSize: '0.8rem'
-                }}
-              >
-                <option value="">All Registered Nodes</option>
-                {nodes.map((n) => (
-                  <option key={n.node_id} value={n.node_id}>
-                    {n.node_id} — {n.name}
-                  </option>
-                ))}
-              </select>
+            <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#1e293b', borderRadius: '6px', fontSize: '0.75rem', color: '#cbd5e1' }}>
+              <div>• Standard: <strong>RFC 4180 Compliant with Formula Injection Sanitization</strong></div>
+              <div>• Columns: <strong>timestamp, node_id, displacement_mm, velocity_mm_hr, vector_tilt_deg, vibration_rms, data_source</strong></div>
+              <div>• Scope: <strong>{selectedNodeId || 'All Concession Sensors'}</strong></div>
             </div>
           </div>
 
           <div style={{ marginTop: '1.5rem' }}>
-            <button onClick={() => handleExport('csv')} className="btn btn-secondary" style={{ width: '100%' }}>
-              <Download size={15} /> Export Raw Measurements (CSV)
+            <button
+              onClick={() => handleExport('csv')}
+              disabled={downloading}
+              className="btn btn-secondary"
+              style={{ width: '100%' }}
+            >
+              <Download size={15} /> {downloading ? 'Exporting CSV Records...' : 'Export Raw Measurements (CSV)'}
             </button>
           </div>
         </div>

@@ -53,3 +53,18 @@ class TrendResponse(BaseModel):
     series: List[TrendSeriesPoint]
     max_rate_mm_hr: Optional[float] = None
     total_net_displacement_mm: Optional[float] = None
+
+
+class SpatialCorroborationItem(BaseModel):
+    cluster_id: str
+    node_ids: List[str]
+    centroid_lat: float
+    centroid_lon: float
+    average_displacement_mm: float
+    corroboration_status: str  # CORROBORATED_HAZARD, ISOLATED_EVENT, STABLE_CLUSTER
+    description: str
+
+
+class SpatialCorroborationResponse(BaseModel):
+    timestamp: datetime
+    active_clusters: List[SpatialCorroborationItem]

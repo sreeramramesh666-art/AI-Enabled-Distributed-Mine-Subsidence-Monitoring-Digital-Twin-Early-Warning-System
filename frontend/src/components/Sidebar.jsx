@@ -10,6 +10,7 @@ import {
   Sliders,
   FileText,
   Settings,
+  FlaskConical,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { path: '/telemetry', label: 'Telemetry Explorer', icon: LineChart },
   { path: '/alerts', label: 'Alerts Centre', icon: Bell },
   { path: '/analytics', label: 'Analytics & Risk', icon: TrendingUp },
+  { path: '/experiments', label: 'Laboratory Test-Rig', icon: FlaskConical },
   { path: '/simulator', label: 'Simulator Control', icon: Sliders },
   { path: '/reports', label: 'Export & Reports', icon: FileText },
   { path: '/settings', label: 'Settings', icon: Settings },
@@ -86,3 +88,4 @@ export function Sidebar({ alertCount = 0 }) {
     </aside>
   );
 }
+

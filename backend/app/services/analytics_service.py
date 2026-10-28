@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
@@ -6,15 +7,28 @@ from sqlalchemy import func, desc
 from backend.app.db.models import SensorNode, TelemetryRecord, Alert
 from backend.app.services.node_service import NodeService
 from backend.app.schemas.analytics import (
-    AnalyticsSummaryResponse, NodeHealthItem, TrendResponse, TrendSeriesPoint
+    AnalyticsSummaryResponse, NodeHealthItem, TrendResponse, TrendSeriesPoint,
+    SpatialCorroborationItem, SpatialCorroborationResponse
 )
+
+
+def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Approximate distance in metres between two WGS84 geographic coordinates."""
+    r = 6371000.0  # Earth radius in metres
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = (math.sin(delta_phi / 2.0) ** 2 +
+         math.cos(phi1) * math.cos(phi2) * (math.sin(delta_lambda / 2.0) ** 2))
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return r * c
 
 
 class AnalyticsService:
     @staticmethod
     def get_summary(db: Session, simulator_running: bool = False) -> AnalyticsSummaryResponse:
-        nodes = NodeService.list_nodes(db=db)
-        total_nodes = len(nodes)
+        nodes, total_nodes = NodeService.list_nodes(db=db, limit=1000)
         online_nodes = sum(1 for n in nodes if n.connectivity_status == "ONLINE")
         stale_nodes = sum(1 for n in nodes if n.connectivity_status == "STALE")
         offline_nodes = sum(1 for n in nodes if n.connectivity_status == "OFFLINE")
@@ -31,14 +45,11 @@ class AnalyticsService:
             Alert.status == "ACTIVE", Alert.severity == "WATCH"
         ).scalar() or 0
 
-        # Latest telemetry record
         latest = db.query(TelemetryRecord).order_by(desc(TelemetryRecord.timestamp)).first()
         last_telemetry_at = latest.timestamp if latest else None
 
-        # Data completeness estimate (reporting nodes vs total)
         completeness = round((online_nodes / total_nodes * 100.0), 1) if total_nodes > 0 else 0.0
 
-        # Overall mine risk status
         if active_crit > 0:
             overall_risk = "CRITICAL"
         elif active_warn > 0:
@@ -69,7 +80,11 @@ class AnalyticsService:
         db: Session,
         node_id: str,
         hours: float = 24.0
-    ) -> TrendResponse:
+    ) -> Optional[TrendResponse]:
+        node = db.query(SensorNode).filter(SensorNode.node_id == node_id).first()
+        if not node:
+            return None
+
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         records = (
@@ -79,7 +94,7 @@ class AnalyticsService:
                 TelemetryRecord.timestamp >= cutoff
             )
             .order_by(TelemetryRecord.timestamp.asc())
-            .limit(1000)
+            .limit(2000)
             .all()
         )
 
@@ -111,11 +126,10 @@ class AnalyticsService:
 
     @staticmethod
     def get_node_health(db: Session) -> List[NodeHealthItem]:
-        nodes = NodeService.list_nodes(db=db)
+        nodes, _ = NodeService.list_nodes(db=db, limit=1000)
         items = []
 
         for node in nodes:
-            # Estimate packet loss from sequence numbers if present
             recent_seqs = (
                 db.query(TelemetryRecord.sequence_number)
                 .filter(
@@ -134,7 +148,6 @@ class AnalyticsService:
                 if expected > received:
                     loss_pct = round(((expected - received) / expected) * 100.0, 1)
 
-            # Quality status
             quality = "NOMINAL"
             if node.connectivity_status == "OFFLINE":
                 quality = "NO_SIGNAL"
@@ -155,3 +168,79 @@ class AnalyticsService:
             ))
 
         return items
+
+    @staticmethod
+    def get_spatial_corroboration(db: Session, max_cluster_dist_m: float = 600.0) -> SpatialCorroborationResponse:
+        """
+        Evaluate spatial clustering and peer corroboration across active monitoring nodes.
+        If multiple neighbouring nodes within max_cluster_dist_m exhibit displacement,
+        the hazard is corroborated. Single isolated displacements are flagged for sensor check.
+        """
+        nodes, _ = NodeService.list_nodes(db=db, limit=500)
+        now = datetime.now(timezone.utc)
+
+        # Retrieve latest displacement for each node
+        latest_disp_map: Dict[str, float] = {}
+        for n in nodes:
+            rec = (
+                db.query(TelemetryRecord.displacement_mm)
+                .filter(TelemetryRecord.node_id == n.node_id, TelemetryRecord.displacement_mm.isnot(None))
+                .order_by(desc(TelemetryRecord.timestamp))
+                .first()
+            )
+            if rec and rec[0] is not None:
+                latest_disp_map[n.node_id] = rec[0]
+
+        # Simple single-linkage spatial clustering
+        visited = set()
+        clusters: List[SpatialCorroborationItem] = []
+        cluster_idx = 1
+
+        for i, n1 in enumerate(nodes):
+            if n1.node_id in visited:
+                continue
+
+            current_group = [n1]
+            visited.add(n1.node_id)
+
+            for j, n2 in enumerate(nodes):
+                if n2.node_id not in visited and i != j:
+                    dist = haversine_distance_m(n1.latitude, n1.longitude, n2.latitude, n2.longitude)
+                    if dist <= max_cluster_dist_m:
+                        current_group.append(n2)
+                        visited.add(n2.node_id)
+
+            group_ids = [n.node_id for n in current_group]
+            centroid_lat = sum(n.latitude for n in current_group) / len(current_group)
+            centroid_lon = sum(n.longitude for n in current_group) / len(current_group)
+
+            disps = [latest_disp_map[nid] for nid in group_ids if nid in latest_disp_map]
+            avg_disp = round(sum(disps) / len(disps), 3) if disps else 0.0
+
+            moving_count = sum(1 for d in disps if abs(d) >= 10.0)
+
+            if len(current_group) > 1 and moving_count >= 2:
+                status = "CORROBORATED_HAZARD"
+                desc_text = f"Corroborated deformation across {len(current_group)} adjacent nodes ({', '.join(group_ids)}). Average displacement: {avg_disp:.2f} mm."
+            elif moving_count == 1:
+                status = "ISOLATED_EVENT"
+                desc_text = f"Single isolated node displacement detected in cluster. Check physical benchmark or transducer mounting."
+            else:
+                status = "STABLE_CLUSTER"
+                desc_text = f"Nominal stability across {len(current_group)} nodes in this sector."
+
+            clusters.append(SpatialCorroborationItem(
+                cluster_id=f"CLUSTER-SEC-{cluster_idx:02d}",
+                node_ids=group_ids,
+                centroid_lat=round(centroid_lat, 5),
+                centroid_lon=round(centroid_lon, 5),
+                average_displacement_mm=avg_disp,
+                corroboration_status=status,
+                description=desc_text
+            ))
+            cluster_idx += 1
+
+        return SpatialCorroborationResponse(
+            timestamp=now,
+            active_clusters=clusters
+        )

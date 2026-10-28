@@ -1,9 +1,44 @@
 import React from 'react';
-import { AlertTriangle, AlertCircle, Eye, CheckCircle2, HelpCircle, Wifi, WifiOff, Clock } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Eye, CheckCircle2, HelpCircle, Wifi, WifiOff, Clock, Sparkles, Cpu } from 'lucide-react';
 
 export function StatusBadge({ status, type = 'severity' }) {
   if (!status) return null;
   const s = String(status).toUpperCase();
+
+  if (type === 'source') {
+    if (s.includes('SIMULAT')) {
+      return (
+        <span
+          className="badge"
+          style={{
+            backgroundColor: 'rgba(217, 119, 6, 0.2)',
+            color: '#fbbf24',
+            border: '1px solid #d97706',
+            fontSize: '0.72rem',
+            letterSpacing: '0.04em',
+            fontWeight: 700
+          }}
+        >
+          <Sparkles size={11} /> SYNTHETIC SIMULATOR
+        </span>
+      );
+    }
+    return (
+      <span
+        className="badge"
+        style={{
+          backgroundColor: 'rgba(6, 182, 212, 0.15)',
+          color: '#38bdf8',
+          border: '1px solid #0284c7',
+          fontSize: '0.72rem',
+          letterSpacing: '0.04em',
+          fontWeight: 700
+        }}
+      >
+        <Cpu size={11} /> PHYSICAL SENSOR ({s})
+      </span>
+    );
+  }
 
   if (type === 'connectivity') {
     if (s === 'ONLINE') {
@@ -62,3 +97,4 @@ export function StatusBadge({ status, type = 'severity' }) {
       );
   }
 }
+

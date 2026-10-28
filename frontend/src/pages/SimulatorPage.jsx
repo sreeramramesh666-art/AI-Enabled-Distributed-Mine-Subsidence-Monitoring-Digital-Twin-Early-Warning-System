@@ -297,3 +297,4 @@ export function SimulatorPage({ latestTelemetry }) {
     </div>
   );
 }
+

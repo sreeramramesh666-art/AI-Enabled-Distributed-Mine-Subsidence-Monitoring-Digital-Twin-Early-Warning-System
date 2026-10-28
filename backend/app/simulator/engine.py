@@ -19,12 +19,12 @@ logger = logging.getLogger("mineguard.simulator")
 
 # Realistic demonstration coordinates (Jharia Mining Region demonstration site)
 DEMO_NODES = [
-    {"node_id": "NODE-PIT-NORTH-01", "name": "North Highwall Bench Sector A", "lat": 23.7541, "lon": 86.4215, "elev": 185.0, "type": "highwall_extensometer"},
-    {"node_id": "NODE-PIT-NORTH-02", "name": "North Highwall Toe Sensor B", "lat": 23.7552, "lon": 86.4228, "elev": 162.0, "type": "piezometer_tilt"},
-    {"node_id": "NODE-PIT-SOUTH-03", "name": "South Haul-Road Monitoring Node", "lat": 23.7518, "lon": 86.4201, "elev": 195.0, "type": "inclinometer_gauge"},
-    {"node_id": "NODE-BENCH-EAST-04", "name": "East Waste-Dump Stability Node", "lat": 23.7535, "lon": 86.4265, "elev": 210.0, "type": "extensometer_multiparam"},
-    {"node_id": "NODE-SLOPE-WEST-05", "name": "West Catch-Bench Inclinometer", "lat": 23.7522, "lon": 86.4178, "elev": 178.0, "type": "tiltmeter_acoustic"},
-    {"node_id": "NODE-PIPELINE-06", "name": "Mine Water De-watering Pipeline Gauge", "lat": 23.7560, "lon": 86.4240, "elev": 190.0, "type": "crack_meter_lvdt"},
+    {"node_id": "NODE-PIT-NORTH-01", "name": "North Highwall Bench Sector A", "lat": 23.7541, "lon": 86.4215, "elev": 185.0, "type": "highwall_extensometer", "panel": "Panel-North-01", "depth": 120.0, "method": "Longwall", "geology": "Sandstone overburden, 150m from Boundary Fault"},
+    {"node_id": "NODE-PIT-NORTH-02", "name": "North Highwall Toe Sensor B", "lat": 23.7552, "lon": 86.4228, "elev": 162.0, "type": "piezometer_tilt", "panel": "Panel-North-01", "depth": 145.0, "method": "Longwall", "geology": "Shale-sandstone transition zone"},
+    {"node_id": "NODE-PIT-SOUTH-03", "name": "South Haul-Road Monitoring Node", "lat": 23.7518, "lon": 86.4201, "elev": 195.0, "type": "inclinometer_gauge", "panel": "Panel-West-03", "depth": 85.0, "method": "Bord and Pillar", "geology": "Alluvial silt over competent sandstone"},
+    {"node_id": "NODE-BENCH-EAST-04", "name": "East Waste-Dump Stability Node", "lat": 23.7535, "lon": 86.4265, "elev": 210.0, "type": "extensometer_multiparam", "panel": "Panel-East-02", "depth": 60.0, "method": "Open Cast Bench", "geology": "Weathered sandstone waste dump slope"},
+    {"node_id": "NODE-SLOPE-WEST-05", "name": "West Catch-Bench Inclinometer", "lat": 23.7522, "lon": 86.4178, "elev": 178.0, "type": "tiltmeter_acoustic", "panel": "Panel-West-03", "depth": 95.0, "method": "Bord and Pillar", "geology": "Fault gauge contact zone"},
+    {"node_id": "NODE-PIPELINE-06", "name": "Mine Water De-watering Pipeline Gauge", "lat": 23.7560, "lon": 86.4240, "elev": 190.0, "type": "crack_meter_lvdt", "panel": "Panel-North-01", "depth": 30.0, "method": "Surface Infrastructure", "geology": "Topsoil surface corridor"},
 ]
 
 
@@ -54,6 +54,12 @@ class SimulationEngine:
                     elevation_m=d["elev"],
                     node_type=d["type"],
                     installation_location="Demonstration Pit Sector",
+                    mine_panel=d.get("panel"),
+                    depth_m=d.get("depth"),
+                    extraction_method=d.get("method"),
+                    geological_context=d.get("geology"),
+                    sampling_interval_sec=5.0,
+                    calibration_status="nominal",
                     firmware_version="v1.2-sim",
                     is_enabled=True
                 )
@@ -210,3 +216,4 @@ if __name__ == "__main__":
             print("Simulator terminated.")
 
     asyncio.run(main())
+
